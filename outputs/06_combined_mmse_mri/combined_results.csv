@@ -1,0 +1,2 @@
+model,modality,n_features,n_nonzero,lam,cohort_n,train_n,test_n,n_test,accuracy,majority_baseline,lift_over_majority,roc_auc,pr_auc,pr_auc_baseline,balanced_accuracy,sensitivity,specificity,precision,f1_converter,TP,FP,FN,TN,acc_high_conf,acc_low_conf,frac_high_conf,confidently_wrong,acc_ci_lo,acc_ci_hi,auc_ci_lo,auc_ci_hi
+MMSE+MRI combined,MMSE+MRI,360,46,12.0,776,543,233,233,0.7597,0.6395,0.1202,0.7966,0.7124,0.3605,0.7108,0.5357,0.8859,0.7258,0.6164,45,17,39,132,0.8429,0.7239,0.3004,11,0.6996,0.8155,0.7291,0.8634
