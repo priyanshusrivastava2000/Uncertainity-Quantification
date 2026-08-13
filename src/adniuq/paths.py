@@ -28,6 +28,7 @@ PIPELINE_DIR = OUTPUT_ROOT / "05_pipeline"
 COMBINED_DIR = OUTPUT_ROOT / "06_combined_mmse_mri"
 COMBINED_ALL_DIR = OUTPUT_ROOT / "07_combined_all"
 PIPELINE_ALL_DIR = OUTPUT_ROOT / "08_pipeline_all"
+CROSS_VALIDATION_DIR = OUTPUT_ROOT / "09_cross_validation"
 
 STAGE_DIRS = (
     BASELINE_DIR,
@@ -38,6 +39,7 @@ STAGE_DIRS = (
     COMBINED_DIR,
     COMBINED_ALL_DIR,
     PIPELINE_ALL_DIR,
+    CROSS_VALIDATION_DIR,
 )
 
 DXSUM_PATTERN = "*DXSUM*.csv"
@@ -81,6 +83,11 @@ STAGE2_ALL_FEATURE_SELECTION_XLSX = (
 )
 STAGE2_ALL_PIPELINE_MATRIX_PNG = PIPELINE_ALL_DIR / "confidence_matrix_pipeline_all.png"
 PIPELINE_ALL_RESULTS_CSV = PIPELINE_ALL_DIR / "pipeline_all_results.csv"
+
+CV_REPEATS_CSV = CROSS_VALIDATION_DIR / "cv_repeats.csv"
+CV_SUMMARY_CSV = CROSS_VALIDATION_DIR / "cv_summary.csv"
+CV_XLSX = CROSS_VALIDATION_DIR / "cross_validation.xlsx"
+CV_AUC_PNG = CROSS_VALIDATION_DIR / "cv_auc_distribution.png"
 
 
 def baseline_csv(modality: str) -> Path:

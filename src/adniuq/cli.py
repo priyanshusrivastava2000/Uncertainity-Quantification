@@ -22,6 +22,8 @@ PIPELINE = (
     ("s07_combined_all_model", []),
     ("s08_stage2_all_dataset", []),
     ("s08_stage2_all_model", []),
+    ("s09_cross_validation", []),
+    ("s09_readme_table", []),
 )
 
 USAGE = (
