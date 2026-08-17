@@ -80,6 +80,164 @@ The claim is not that a cascade beats full fusion on AUC — it is that it reach
 comparable accuracy while never ordering the expensive test for the patients the cheap one
 already handled.
 
+### The ambiguous-patient specialist (stage 10)
+
+A different question about the same cascade: rather than routing the hard patients to a
+model trained on everyone, what happens if you train a model **only on the hard patients**?
+
+Stage 1 (MMSE + MRI) could not call 163 of the 233 held-out patients — 118 it would have
+got right anyway and 45 it would have got wrong. `s10_ambiguous_specialist` takes exactly
+those 163, splits them into their own train/test, and fits a tri-modal MMSE + MRI + CSF
+model on that population alone. It is reported two ways:
+
+- **20 resampled 70/30 holdouts** within the 163 (≈114 train / 49 test) → mean ± sd;
+- **5 × stratified 5-fold**, so every one of the 163 is predicted while held out → one
+  score computed on the whole cohort, on the same patients stage 08 scored.
+
+The workbook includes a **rescue analysis**: of the 45 stage 1 got wrong, how many the
+specialist recovers, and of the 118 it got right, how many it breaks.
+
+**Result — the specialist does not pay off.** On the same 163 patients:
+
+| Model | Trained on | ROC-AUC | Accuracy |
+|---|---|---|---|
+| Specialist, 20 × holdout 70/30 | ~114 of the 163 | 0.768 ± 0.045 | 0.680 ± 0.050 |
+| Specialist, 5 × 5-fold out-of-fold | ~130 of the 163 | 0.732 ± 0.023 | 0.664 ± 0.033 |
+| Specialist, pooled out-of-fold | ~130 of the 163 | 0.773 | 0.706 |
+| Stage 1 MMSE+MRI — *the model that was unsure about them* | the other 543 | **0.815** | 0.724 |
+| Stage 08 stage-2 MMSE+MRI+CSF | the other 543 | **0.833** | **0.742** |
+
+Rescue analysis on the pooled out-of-fold predictions: of the 45 stage 1 got wrong the
+specialist recovers 19, but of the 118 it got right the specialist breaks 22 — a net loss
+of 3 patients.
+
+Two things this shows. **Low confidence is not poor ranking**: stage 1 still separates these
+patients at AUC 0.815, its probabilities are simply clustered near 0.5, which is exactly what
+the confidence gate measures and not the same as being wrong. And **363 features against
+~130 training patients is too thin** — λ lands anywhere from 1 to 16 across splits and the
+model keeps 20 ± 17 features, i.e. the fit is not stable. Restricting training to the hard
+cases costs more in sample size than it gains in specialisation.
+
+Two limits are structural and are recorded in `run_config`:
+
+- These 163 were the **held-out set of every upstream model**. Training on them means the
+  specialist's scores are *not* comparable to the project's headline numbers, and the model
+  cannot be applied to the patients it learned from.
+- ~114–130 training patients against 369 features is a thin regime. The point of running
+  both protocols and reporting ± is that a single number here would be close to meaningless.
+
+### The modality handoff (stage 13)
+
+Everything above shares one 70/30 split and mostly asks about *fusion*. `s13_modality_handoff`
+asks a narrower question on its own footing: fit **three single-modality classifiers** on a
+fresh stratified **50/50** split of the same 776 patients (388 train / 388 test, seed 42),
+then take the patients the cheap model was **not confident about** and look at what the next
+model does with those exact patients — does it become confident, and does the answer change?
+
+The three models on the same 388 held-out patients (majority 0.6392):
+
+| Model | Features | Non-zero | λ | ROC-AUC | 95 % CI | Accuracy | Max confidence | % HIGH (≥0.80) |
+|---|---|---|---|---|---|---|---|---|
+| MMSE | 37 | 8 | 16 | 0.656 | [0.596, 0.713] | 0.668 | 0.741 | 0.0 % |
+| MRI | 323 | 27 | 12 | 0.728 | [0.674, 0.778] | 0.701 | 0.962 | 27.3 % |
+| CSF | 9 | 4 | 16 | 0.812 | [0.766, 0.854] | 0.732 | 0.939 | 15.7 % |
+
+These are lower than the headline table by construction — 388 training patients instead of
+543, scored on a different 388 — and are not comparable to it.
+
+**Who is each classifier confident about?** Every one of the 776 gets a probability from all
+three models (test rows from the fitted model, train rows out-of-fold), so the confident and
+underconfident populations can be counted directly:
+
+| Model | ≥0.70 confident | acc | conf. wrong | ≥0.80 confident | acc | conf. wrong |
+|---|---|---|---|---|---|---|
+| MMSE | 298 (38.4 %) | 0.738 | 78 | 2 (0.3 %) | 0.500 | 1 |
+| MRI | 384 (49.5 %) | 0.828 | 66 | 189 (24.4 %) | 0.873 | 24 |
+| CSF | 295 (38.0 %) | 0.868 | 39 | 106 (13.7 %) | 0.915 | 9 |
+
+MMSE is the outlier: it essentially never clears 0.80, and where it is confident at 0.70 it
+is right 74 % of the time against MRI's 83 % and CSF's 87 %. That is the whole premise of
+the handoff — and the reason the source gate is 0.70 rather than 0.80.
+
+**The handoff, MMSE → MRI.** MMSE's confidence never exceeds 0.741, so the source gate is
+0.70, the same value stage 05 uses for the same reason (at 0.80 it hands off all 388 and the
+hop stops being a selection; every other gate is tabulated in the `_sweep` sheet). At 0.70,
+MMSE keeps 164 patients and hands 224 to MRI — and those 224 are the harder half, 43.8 %
+converters against 36.1 % overall.
+
+![MMSE to MRI handoff](outputs/13_modality_handoff/hop1_mmse_to_mri.png)
+
+- **Does MRI become confident about them?** 46 of the 224 (20.5 %) reach confidence ≥ 0.80.
+  Of those 46, **34 are right and 12 are confidently wrong** — so the fifth of the cohort MRI
+  is willing to call, it calls at 74 % accuracy. The other 178 stay below the gate.
+- **Does the answer change?** Accuracy on these 224 goes 0.612 (MMSE) → 0.643 (MRI). MRI
+  **fixes 37** patients MMSE got wrong and **breaks 30** it got right — a net gain of 7 out
+  of 224. 157 patients are unchanged.
+
+The churn is the point: a 3-point accuracy gain is 67 patients changing sides, not 7 patients
+improving. The workbook carries every one of them by RID.
+
+**The handoff, MRI → CSF.** The 178 MRI was still unsure about go on to CSF. MRI can reach
+the 0.80 band, so this hop gates at 0.80 rather than 0.70 — which means all 178 pass through
+by construction, since they are exactly the patients MRI left under that band.
+
+![MRI to CSF handoff](outputs/13_modality_handoff/hop2_mri_to_csf.png)
+
+- **Does CSF become confident about them?** 24 of 178 (13.5 %) — **21 right, 3 confidently
+  wrong**. 154 stay unsure. Mean confidence *falls* by 0.008: CSF is not systematically more
+  certain about this group, it is certain about a different, smaller slice of it.
+- **Does the answer change?** 0.618 (MRI) → 0.652 (CSF) on these 178. **32 fixed, 26 broken**,
+  net +6 — the same shape as hop 1, and again 58 patients change sides to move 6.
+
+End to end, of the 388 held-out patients: MMSE confidently answers 164, MRI adds 46, CSF adds
+24, and **154 are left that no single modality can call** — 40 % of the cohort. On those 154
+every model scores *below* the 0.639 majority baseline — MMSE 0.578, MRI 0.584, CSF 0.617 —
+so on this group the confidence gate is not merely cautious, it is correctly identifying
+patients on whom all three classifiers are worse than guessing the majority class.
+
+| Hop | Incoming | Gate | Handed on | Became confident | Right / wrong | Fixed | Broken | Net |
+|---|---|---|---|---|---|---|---|---|
+| MMSE → MRI | 388 | 0.70 | 224 | 46 (20.5 %) | 34 / 12 | 37 | 30 | +7 |
+| MRI → CSF | 178 | 0.80 | 178 | 24 (13.5 %) | 21 / 3 | 32 | 26 | +6 |
+
+The consistent finding across both hops is that a new modality buys **confidence on a small
+minority** and a **net accuracy gain far smaller than the churn it causes**. Roughly one
+patient is broken for every 1.2 fixed.
+
+### Accumulating instead of swapping (stage 14)
+
+Stage 13 hands each hop to a model that has *replaced* the previous modality — MRI never
+sees the MMSE scores. `s14_fusion_handoff` runs the identical machinery on the identical
+50/50 split, but each step *adds* a modality instead:
+**MMSE → MMSE+MRI → MMSE+MRI+CSF**.
+
+| Model | Features | Non-zero | λ | ROC-AUC | 95 % CI | Accuracy | Max confidence | % HIGH |
+|---|---|---|---|---|---|---|---|---|
+| MMSE | 37 | 8 | 16 | 0.656 | [0.596, 0.713] | 0.668 | 0.741 | 0.0 % |
+| MMSE+MRI | 360 | 32 | 12 | 0.737 | [0.683, 0.788] | 0.717 | 0.936 | 31.2 % |
+| MMSE+MRI+CSF | 369 | 29 | 12 | 0.804 | [0.757, 0.847] | 0.760 | 0.976 | 36.3 % |
+
+![MMSE+MRI to MMSE+MRI+CSF handoff](outputs/14_fusion_handoff/hop2_mmse_mri_to_mmse_mri_csf.png)
+
+| Hop | Incoming | Gate | Handed on | Became confident | Right / wrong | Fixed | Broken | Net |
+|---|---|---|---|---|---|---|---|---|
+| MMSE → MMSE+MRI | 388 | 0.70 | 224 | 51 (22.8 %) | 37 / 14 | 34 | 22 | **+12** |
+| MMSE+MRI → MMSE+MRI+CSF | 173 | 0.80 | 173 | 31 (17.9 %) | 29 / 2 | 21 | 5 | **+16** |
+
+**Accumulating is strictly better than swapping**, and the second hop is where the two
+designs separate hardest. On its 173 patients the fusion model fixes 21 and breaks only
+**5** — accuracy 0.647 → 0.740 — where stage 13's CSF-only model fixed 32 but broke 26 on a
+comparable group, for a third of the net gain. Two reasons, both visible in the workbooks:
+the fusion model cannot lose what MMSE and MRI already knew, and its λ search runs over 369
+features rather than 9, so it can keep a CSF signal *and* the imaging evidence that
+contradicts it. Of the 31 patients it becomes confident about, only 2 are confidently wrong.
+
+End to end: MMSE answers 164, +MRI adds 51, +CSF adds 31, leaving **142 of 388 (36.6 %)
+unclaimed** against 154 for the single-modality chain. The tri-modal model does reach 0.697
+on those 142 — above the 0.639 majority baseline, where every model in stage 13 fell below
+it. So accumulation helps the hardest patients too; it just cannot make the model confident
+about them.
+
 ---
 
 ## Methodology guarantees
@@ -138,7 +296,13 @@ These are properties of the pipeline, not of any single script:
 │       ├── s07_combined_all_model.py   # MMSE + MRI + CSF model
 │       ├── s08_stage2_all_dataset.py   # MMSE+MRI -> +CSF cascade, stage-1 routing
 │       ├── s08_stage2_all_model.py     # stage-2 fit + end-to-end cascade
-│       └── s09_cross_validation.py     # resampled splits -> mean +- sd per model
+│       ├── s09_cross_validation.py     # resampled splits -> mean +- sd per model
+│       ├── s09_readme_table.py         # writes that summary into this README
+│       ├── s10_ambiguous_specialist.py # tri-modal model trained on the routed 163
+│       ├── s11_confidence_bands.py     # every patient's band, both fusion models
+│       ├── s12_boundary_distance.py    # signed log-odds / geometric distance per patient
+│       ├── s13_modality_handoff.py     # 3 single-modality models on a 50/50 split, handoff
+│       └── s14_fusion_handoff.py       # same, but each hop adds a modality to the last
 ├── outputs/                        # everything the pipeline produces, one dir per stage
 │   ├── 01_baseline_data/           # {mmse,mri,csf}_baseline.csv, audit_report.md
 │   ├── 02_trimodal_baseline/       # aligned tri-modal tables, cohort RIDs
@@ -148,7 +312,11 @@ These are properties of the pipeline, not of any single script:
 │   ├── 06_combined_mmse_mri/       # MMSE + MRI fusion
 │   ├── 07_combined_all/            # MMSE + MRI + CSF fusion
 │   ├── 08_pipeline_all/            # MMSE+MRI -> +CSF cascade
-│   └── 09_cross_validation/        # per-split results, mean +- sd summary, AUC spread
+│   ├── 09_cross_validation/        # per-split results, mean +- sd summary, AUC spread
+│   ├── 10_ambiguous_specialist/    # specialist on the routed 163, rescue analysis
+│   ├── 12_boundary_distance/       # per-patient distance to each fusion boundary
+│   ├── 13_modality_handoff/        # 50/50 split, MMSE -> MRI -> CSF handoff
+│   └── 14_fusion_handoff/          # 50/50 split, MMSE -> +MRI -> +CSF handoff
 └── data/raw/                       # ADNI source tables (not committed — see below)
 ```
 
@@ -235,6 +403,10 @@ Every stage takes `--help`. The options that matter most:
 | `--test-size`, `--seed` | `s03_mmse_conversion` | `0.30`, `42` | the canonical split |
 | `--repeats`, `--scheme` | `s09_cross_validation` | `20`, `shuffle` | how the split is resampled |
 | `--models`, `--inner-folds` | `s09_cross_validation` | all five, `5` | which models, λ-search folds |
+| `--repeats`, `--kfold-repeats` | `s10_ambiguous_specialist` | `20`, `5` | holdout resamples, k-fold repeats |
+| `--chain` | `s13`/`s14` handoff | `mmse mri csf` / `mmse mmse_mri mmse_mri_csf` | handoff order; each hop is fed the previous model's unsure patients. Any of `mmse`, `mri`, `csf`, `mmse_mri`, `mmse_mri_csf` |
+| `--hi-source` | `s13`/`s14` handoff | per source model | gate the source must clear to keep a patient — `--hi`, except MMSE at `0.70`; one value or one per hop |
+| `--test-size`, `--seed` | `s13`/`s14` handoff | `0.50`, `42` | their own split, independent of the canonical one |
 
 Stage order matters — each stage validates its inputs and exits with the upstream stage to
 run if something is missing.
@@ -262,6 +434,33 @@ Each modelling stage writes:
 Stage 09 additionally writes `cv_repeats.csv` (one row per model per split),
 `cv_summary.csv` (mean / sd / min / max per metric), `cross_validation.xlsx` and
 `cv_auc_distribution.png`.
+
+Stage 13 writes `modality_handoff.xlsx`, whose sheets answer the handoff question directly:
+
+| Sheet | What it holds |
+|---|---|
+| `all_patients` | **all 776 patients under all three classifiers before any handoff** — each model's probability, confidence, `confident` / `underconfident` status at both thresholds, prediction and correctness, plus `n_models_confident`, `models_confident` and `all_models_agree` |
+| `confidence_counts` | how many patients each model is confident about, by split, at every gate from 0.55 to 0.90 — with accuracy inside each band and the confidently-wrong count |
+| `test_predictions` | the 388 held-out patients only, all three models side by side |
+| `model_summary` | the three models' metrics with bootstrap CIs |
+| `hop1_patients` | **one row per handed-off patient** — both models' probability, confidence, prediction and correctness, plus `became_confident`, `confidence_gain`, `correctness_move` (`right -> wrong` etc.), `fixed`, `broken` |
+| `hop1_conf_move` | source band × target band over everyone the source saw |
+| `hop1_correct_move` | source right/wrong × target right/wrong on the handed-off set |
+| `hop1_sweep` | the same hop at source gates 0.55 → 0.90, so the gate choice is visible rather than assumed |
+| `hop2_*` | the same four sheets for the second hop, whose model sees only the patients hop 1's target was *also* unsure about |
+| `hop_summary` | one row per hop, naming its source and target |
+| `run_config` | split, seeds, λ per model, max confidence per model, and the caveats |
+
+Sheets are numbered rather than named after their models because Excel caps sheet names at
+31 characters; `hop_summary` carries the source → target mapping. The figures keep the long
+descriptive filenames. Stage 14's workbook, `14_fusion_handoff/fusion_handoff.xlsx`, has
+exactly the same layout.
+
+In `all_patients`, the 388 test rows carry the fitted model's probability (as in
+deployment) and the 388 train rows carry an out-of-fold probability — a model's confidence
+about a patient it was fitted on is optimistic. The `_conf_source` column records which,
+and bands should be compared within a split, not across. The handoff itself uses the test
+half only. `all_patients` and `test_predictions` are also written as flat CSVs.
 
 ---
 

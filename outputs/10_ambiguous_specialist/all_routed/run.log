@@ -1,0 +1,83 @@
+============================================================================================
+AMBIGUOUS-PATIENT SPECIALIST  -  MMSE + MRI + CSF on the stage-1 routed cohort
+============================================================================================
+  cohort            : all-routed  (stage-1 routed, both sides of the canonical split)
+  patients          : 558   train=395  test=163
+    stage 1 had right : 359
+    stage 1 had wrong : 199
+  converters        : 234 (41.9%)   majority baseline 0.5806
+  features          : 369  (37 MMSE + 323 MRI + 9 CSF)
+
+[holdout]  20 x stratified 70/30 within the cohort
+    split  1/20   train 390 / test 168   lam=12    nz=33   AUC=0.8009   acc=0.7381
+    split  2/20   train 390 / test 168   lam=16    nz=29   AUC=0.7866   acc=0.6964
+    split  3/20   train 390 / test 168   lam=24    nz=11   AUC=0.8322   acc=0.7083
+    split  4/20   train 390 / test 168   lam=8     nz=57   AUC=0.7964   acc=0.7440
+    split  5/20   train 390 / test 168   lam=8     nz=64   AUC=0.7567   acc=0.7143
+    split  6/20   train 390 / test 168   lam=12    nz=37   AUC=0.7794   acc=0.7083
+    split  7/20   train 390 / test 168   lam=8     nz=58   AUC=0.7609   acc=0.6845
+    split  8/20   train 390 / test 168   lam=12    nz=29   AUC=0.8109   acc=0.7500
+    split  9/20   train 390 / test 168   lam=16    nz=21   AUC=0.8224   acc=0.7202
+    split 10/20   train 390 / test 168   lam=8     nz=51   AUC=0.6927   acc=0.6429
+    split 11/20   train 390 / test 168   lam=32    nz=8    AUC=0.7013   acc=0.6012
+    split 12/20   train 390 / test 168   lam=8     nz=61   AUC=0.8012   acc=0.7321
+    split 13/20   train 390 / test 168   lam=12    nz=31   AUC=0.7608   acc=0.6964
+    split 14/20   train 390 / test 168   lam=32    nz=5    AUC=0.7455   acc=0.6667
+    split 15/20   train 390 / test 168   lam=8     nz=55   AUC=0.7859   acc=0.7083
+    split 16/20   train 390 / test 168   lam=32    nz=8    AUC=0.7672   acc=0.6786
+    split 17/20   train 390 / test 168   lam=24    nz=10   AUC=0.8017   acc=0.7321
+    split 18/20   train 390 / test 168   lam=24    nz=11   AUC=0.7838   acc=0.7083
+    split 19/20   train 390 / test 168   lam=12    nz=32   AUC=0.8517   acc=0.7857
+    split 20/20   train 390 / test 168   lam=24    nz=15   AUC=0.7647   acc=0.6726
+
+[kfold]  5 x stratified 5-fold, every patient predicted while held out
+    repeat 1/5   lam(median)=8     AUC=0.7872   acc=0.7168   (all 558 patients out-of-fold)
+    repeat 2/5   lam(median)=8     AUC=0.7880   acc=0.7222   (all 558 patients out-of-fold)
+    repeat 3/5   lam(median)=12    AUC=0.7820   acc=0.7097   (all 558 patients out-of-fold)
+    repeat 4/5   lam(median)=8     AUC=0.7841   acc=0.7186   (all 558 patients out-of-fold)
+    repeat 5/5   lam(median)=8     AUC=0.7506   acc=0.6900   (all 558 patients out-of-fold)
+
+============================================================================================
+RESULTS  -  specialist on the 558 ambiguous patients
+============================================================================================
+  protocol                    splits              AUC          bal.acc         accuracy
+  holdout 70/30                   20     0.780+-0.039     0.682+-0.043     0.704+-0.041
+  5-fold out-of-fold               5     0.778+-0.016     0.695+-0.014     0.712+-0.013
+
+  out-of-fold over all 558 patients (single pass, used for bands):
+    AUC 0.7872   acc 0.7168   bal.acc 0.6992
+    repeat-averaged probabilities: AUC 0.7914   acc 0.7222
+    stage 1 (MMSE+MRI) on the same patients: AUC 0.7014   acc 0.6434
+
+  BAND MOVEMENT  -  all 558 were LOW confidence under MMSE+MRI:
+    moved to HIGH (>= 0.8) under the specialist: 169 (30.3%)
+    still LOW: 389
+specialist_band   n  pct_of_cohort  specialist_correct  specialist_accuracy  stage1_would_be_correct  stage1_accuracy  converters  converter_rate  mean_confidence
+           high 169           30.3                 147               0.8698                      141           0.8343          37           0.219           0.8788
+            low 389           69.7                 253               0.6504                      218           0.5604         197           0.506           0.6446
+
+  movement by side of the canonical split:
+split   n  moved_to_high  pct_moved
+train 395            123       31.1
+ test 163             46       28.2
+
+  rescue analysis (out-of-fold specialist vs what stage 1 had):
+            group   n  specialist_right  specialist_wrong  specialist_accuracy  converter_rate
+stage 1 was WRONG 199                85               114               0.4271           0.643
+stage 1 was RIGHT 359               315                44               0.8774           0.295
+       all routed 558               400               158               0.7168           0.419
+
+  feature selection at lambda=8 (in-sample, descriptive):
+modality  n_features  n_selected  n_zero  pct_selected
+     CSF           9           4       5          44.4
+    MMSE          37          10      27          27.0
+     MRI         323          56     267          17.3
+
+  written to C:\Users\sripr\Documents\Uncertainity Quantification\outputs\10_ambiguous_specialist\all_routed:
+    specialist_splits.csv
+    specialist_summary.csv
+    specialist_oof_predictions.csv
+    specialist_confidence_bands_new.xlsx
+    specialist_feature_selection_new.xlsx
+    confidence_matrix_specialist.png
+    specialist_auc_distribution.png

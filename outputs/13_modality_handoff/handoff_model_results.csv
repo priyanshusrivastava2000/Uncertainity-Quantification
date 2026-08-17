@@ -1,0 +1,4 @@
+model,modality,n_columns,n_features,n_nonzero,lam,cohort_n,train_n,test_n,max_confidence,n_test,accuracy,majority_baseline,lift_over_majority,roc_auc,pr_auc,pr_auc_baseline,balanced_accuracy,sensitivity,specificity,precision,f1_converter,TP,FP,FN,TN,acc_high_conf,acc_low_conf,frac_high_conf,confidently_wrong,acc_ci_lo,acc_ci_hi,auc_ci_lo,auc_ci_hi
+MMSE (50-50 split),MMSE,37,37,8,16.0,776,388,388,0.7413,388,0.6675,0.6392,0.0284,0.656,0.5259,0.3608,0.5611,0.1786,0.9435,0.641,0.2793,25,14,115,234,,0.6675,0.0,0,0.6211,0.7113,0.5963,0.7132
+MRI (50-50 split),MRI,325,323,27,12.0,776,388,388,0.9622,388,0.701,0.6392,0.0619,0.7279,0.594,0.3608,0.6386,0.4143,0.8629,0.6304,0.5,58,34,82,214,0.8208,0.656,0.2732,19,0.6572,0.7448,0.6741,0.7782
+CSF (50-50 split),CSF,11,9,4,16.0,776,388,388,0.9385,388,0.732,0.6392,0.0928,0.812,0.6821,0.3608,0.6597,0.4,0.9194,0.7368,0.5185,56,20,84,228,0.918,0.6972,0.1572,5,0.6881,0.7758,0.7661,0.8544

@@ -18,4 +18,9 @@ STAGES = (
     "s08_stage2_all_model",
     "s09_cross_validation",
     "s09_readme_table",
+    "s10_ambiguous_specialist",
+    "s11_confidence_bands",
+    "s12_boundary_distance",
+    "s13_modality_handoff",
+    "s14_fusion_handoff",
 )

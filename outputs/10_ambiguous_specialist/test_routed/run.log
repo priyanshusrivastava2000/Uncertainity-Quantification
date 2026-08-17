@@ -1,0 +1,73 @@
+============================================================================================
+AMBIGUOUS-PATIENT SPECIALIST  -  MMSE + MRI + CSF on the stage-1 routed cohort
+============================================================================================
+  cohort            : 163 patients that MMSE+MRI could not call
+    stage 1 had right : 118
+    stage 1 had wrong : 45
+  converters        : 68 (41.7%)   majority baseline 0.5828
+  features          : 369  (37 MMSE + 323 MRI + 9 CSF)
+
+[holdout]  20 x stratified 70/30 within the cohort
+    split  1/20   train 114 / test 49   lam=1     nz=55   AUC=0.7603   acc=0.6939
+    split  2/20   train 114 / test 49   lam=12    nz=5    AUC=0.7828   acc=0.6531
+    split  3/20   train 114 / test 49   lam=4     nz=34   AUC=0.8293   acc=0.7143
+    split  4/20   train 114 / test 49   lam=16    nz=4    AUC=0.7034   acc=0.5510
+    split  5/20   train 114 / test 49   lam=8     nz=17   AUC=0.8224   acc=0.7551
+    split  6/20   train 114 / test 49   lam=4     nz=38   AUC=0.8431   acc=0.6939
+    split  7/20   train 114 / test 49   lam=8     nz=18   AUC=0.8086   acc=0.7143
+    split  8/20   train 114 / test 49   lam=8     nz=15   AUC=0.7259   acc=0.7143
+    split  9/20   train 114 / test 49   lam=12    nz=7    AUC=0.7207   acc=0.6939
+    split 10/20   train 114 / test 49   lam=4     nz=41   AUC=0.8034   acc=0.7347
+    split 11/20   train 114 / test 49   lam=16    nz=3    AUC=0.6810   acc=0.6735
+    split 12/20   train 114 / test 49   lam=1     nz=51   AUC=0.7586   acc=0.6735
+    split 13/20   train 114 / test 49   lam=16    nz=4    AUC=0.7845   acc=0.5714
+    split 14/20   train 114 / test 49   lam=8     nz=16   AUC=0.7000   acc=0.6531
+    split 15/20   train 114 / test 49   lam=12    nz=12   AUC=0.7517   acc=0.6327
+    split 16/20   train 114 / test 49   lam=4     nz=35   AUC=0.7810   acc=0.6735
+    split 17/20   train 114 / test 49   lam=12    nz=8    AUC=0.7724   acc=0.6939
+    split 18/20   train 114 / test 49   lam=16    nz=1    AUC=0.8103   acc=0.6939
+    split 19/20   train 114 / test 49   lam=12    nz=12   AUC=0.7621   acc=0.6939
+    split 20/20   train 114 / test 49   lam=8     nz=19   AUC=0.7638   acc=0.7143
+
+[kfold]  5 x stratified 5-fold, every patient predicted while held out
+    repeat 1/5   lam(median)=8     AUC=0.7444   acc=0.6994   (all 163 patients out-of-fold)
+    repeat 2/5   lam(median)=16    AUC=0.7070   acc=0.6564   (all 163 patients out-of-fold)
+    repeat 3/5   lam(median)=8     AUC=0.7070   acc=0.6135   (all 163 patients out-of-fold)
+    repeat 4/5   lam(median)=4     AUC=0.7492   acc=0.6871   (all 163 patients out-of-fold)
+    repeat 5/5   lam(median)=12    AUC=0.7537   acc=0.6626   (all 163 patients out-of-fold)
+
+============================================================================================
+RESULTS  -  specialist on the 163 ambiguous patients
+============================================================================================
+  protocol                    splits              AUC          bal.acc         accuracy
+  holdout 70/30                   20     0.768+-0.045     0.645+-0.065     0.680+-0.050
+  5-fold out-of-fold               5     0.732+-0.023     0.635+-0.034     0.664+-0.033
+
+  pooled out-of-fold predictions over all 163 patients:
+    AUC 0.7728   acc 0.7055   bal.acc 0.6868   sens 0.5735   spec 0.8000
+    stage 1 (MMSE+MRI) on the same patients: AUC 0.8146   acc 0.7239
+
+  rescue analysis (out-of-fold specialist vs what stage 1 had):
+            group   n  specialist_right  specialist_wrong  specialist_accuracy  converter_rate
+stage 1 was WRONG  45                19                26               0.4222           0.622
+stage 1 was RIGHT 118                96                22               0.8136           0.339
+       all routed 163               115                48               0.7055           0.417
+
+  for reference - stage 08 fitted the same 163 patients as a TEST set (trained on the other 543):
+    Stage2 MMSE+MRI+CSF (train=all)         AUC 0.8128   acc 0.6687
+    Stage2 MMSE+MRI+CSF (train=routed)      AUC 0.8331   acc 0.7423
+
+  feature selection at lambda=16 (in-sample, descriptive):
+modality  n_features  n_selected  n_zero  pct_selected
+     CSF           9           2       7          22.2
+    MMSE          37           0      37           0.0
+     MRI         323           5     318           1.5
+
+  written:
+    specialist_splits.csv
+    specialist_summary.csv
+    specialist_oof_predictions.csv
+    ambiguous_specialist.xlsx
+    specialist_feature_selection.xlsx
+    confidence_matrix_specialist.png
+    specialist_auc_distribution.png

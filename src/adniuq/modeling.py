@@ -43,6 +43,45 @@ def predict_proba(clf: CLGLasso, X: np.ndarray) -> np.ndarray:
     return clf.predict_proba(columns, n)
 
 
+def decision_scores(clf: CLGLasso, X: np.ndarray) -> np.ndarray:
+    columns, n = to_columns(X)
+    return clf.decision_function(columns, n)
+
+
+def out_of_fold_predictions(X, y, train, test, lam, folds: int = 5, seed: int = 0):
+    n = len(y)
+    proba = np.full(n, np.nan)
+    scores = np.full(n, np.nan)
+    beta_norm = np.full(n, np.nan)
+    source = np.empty(n, dtype=object)
+
+    gold_train = (y[train] > 0).astype(int)
+    splitter = StratifiedKFold(n_splits=folds, shuffle=True, random_state=seed)
+    for fit_idx, hold_idx in splitter.split(X[train], gold_train):
+        X_fit, X_hold = preprocess(X[train][fit_idx], X[train][hold_idx])
+        clf = fit_clg(X_fit, y[train][fit_idx], lam)
+        held = train[hold_idx]
+        proba[held] = predict_proba(clf, X_hold)
+        scores[held] = decision_scores(clf, X_hold)
+        beta_norm[held] = float(np.linalg.norm(clf.beta_))
+    source[train] = "out_of_fold"
+
+    X_train, X_test = preprocess(X[train], X[test])
+    clf = fit_clg(X_train, y[train], lam)
+    proba[test] = predict_proba(clf, X_test)
+    scores[test] = decision_scores(clf, X_test)
+    beta_norm[test] = float(np.linalg.norm(clf.beta_))
+    source[test] = "fitted_model"
+
+    return {
+        "proba": proba,
+        "scores": scores,
+        "beta_norm": beta_norm,
+        "source": source,
+        "model": clf,
+    }
+
+
 def select_lam(
     X: np.ndarray,
     y: np.ndarray,
