@@ -1,4 +1,0 @@
-model,stage,train_pop,train_n,n_features,n_nonzero,lam,n_test,accuracy,majority_baseline,lift_over_majority,roc_auc,pr_auc,pr_auc_baseline,balanced_accuracy,sensitivity,specificity,precision,f1_converter,TP,FP,FN,TN,acc_high_conf,acc_low_conf,frac_high_conf,confidently_wrong,acc_ci_lo,acc_ci_hi,auc_ci_lo,auc_ci_hi,scans_avoided_pct
-Stage2 MMSE+MRI (train=routed),stage2,routed,360.0,360,23,16.0,147,0.7143,0.5714,0.1429,0.747,0.6529,0.4286,0.7063,0.6508,0.7619,0.6721,0.6613,41,20,22,64,0.75,0.7133,0.0272,1,0.6395,0.7823,0.6619,0.8277,
-Stage2 MMSE+MRI (train=all),stage2,all,543.0,360,46,12.0,147,0.7211,0.5714,0.1497,0.781,0.727,0.4286,0.7083,0.619,0.7976,0.6964,0.6555,39,17,24,67,0.8077,0.7025,0.1769,5,0.6531,0.7891,0.7028,0.8575,
-CASCADE end-to-end,pipeline,routed,,360,23,16.0,233,0.7339,0.6395,0.0944,0.728,0.6044,0.3605,0.6829,0.5,0.8658,0.6774,0.5753,42,20,42,129,0.75,0.7336,0.0172,1,0.6781,0.794,0.657,0.7976,36.9

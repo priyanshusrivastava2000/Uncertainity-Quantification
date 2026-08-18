@@ -1,4 +1,0 @@
-model,stage,train_pop,train_n,n_features,n_nonzero,lam,n_test,accuracy,majority_baseline,lift_over_majority,roc_auc,pr_auc,pr_auc_baseline,balanced_accuracy,sensitivity,specificity,precision,f1_converter,TP,FP,FN,TN,acc_high_conf,acc_low_conf,frac_high_conf,confidently_wrong,acc_ci_lo,acc_ci_hi,auc_ci_lo,auc_ci_hi,lp_avoided_pct
-Stage2 MMSE+MRI+CSF (train=all),stage2,all,543.0,369,7,48.0,163,0.6687,0.5828,0.0859,0.8128,0.6981,0.4172,0.6197,0.3235,0.9158,0.7333,0.449,22,8,46,87,0.75,0.6667,0.0245,1,0.5951,0.7423,0.7465,0.8743,
-Stage2 MMSE+MRI+CSF (train=routed),stage2,routed,395.0,369,28,12.0,163,0.7423,0.5828,0.1595,0.8331,0.7581,0.4172,0.7288,0.6471,0.8105,0.7097,0.6769,44,18,24,77,0.9355,0.697,0.1902,2,0.6748,0.8037,0.7686,0.8914,
-CASCADE end-to-end,pipeline,all,,369,7,48.0,233,0.721,0.6395,0.0815,0.796,0.7109,0.3605,0.6339,0.3214,0.9463,0.7714,0.4538,27,8,57,141,0.8378,0.6667,0.3176,12,0.6609,0.7768,0.7264,0.8576,30.0

@@ -1,3 +1,0 @@
-scheme,n_splits,train_n,test_n,roc_auc_mean,roc_auc_sd,pr_auc_mean,pr_auc_sd,accuracy_mean,accuracy_sd,balanced_accuracy_mean,balanced_accuracy_sd,sensitivity_mean,sensitivity_sd,specificity_mean,specificity_sd,f1_converter_mean,f1_converter_sd,confidently_wrong_mean,confidently_wrong_sd,n_nonzero_mean,n_nonzero_sd,lam_mean,lam_sd
-holdout,20,114,49,0.7683,0.0451,0.6593,0.0596,0.6796,0.0496,0.6447,0.0653,0.455,0.1701,0.8345,0.0686,0.5172,0.1586,1.35,2.5808,19.75,16.6287,9.1,4.9937
-kfold,5,130,163,0.7323,0.0233,0.6217,0.043,0.6638,0.0332,0.6351,0.0341,0.4618,0.0505,0.8084,0.0389,0.5335,0.0475,10.8,3.4205,,,9.6,4.5607
