@@ -1,0 +1,2 @@
+audit,source,target,upstream,incoming_n,source_gate,target_band,kept_by_source,kept_pct,handed_off_by_stage13,converter_rate_kept,source_acc_on_kept,target_acc_on_kept,source_confidently_wrong,rescued_wrong_to_right,broken_right_to_wrong,net_correct_change,unchanged,models_disagree,target_confident,target_confidently_wrong,rescued_by_confident_target,broken_by_confident_target,mean_confidence_change
+MMSE confident -> MRI,MMSE,MRI,none (whole test half),388,0.7,0.8,164,42.3,224,0.256,0.7439,0.7805,42,15,9,6,140,24,60,7,1,1,0.0004

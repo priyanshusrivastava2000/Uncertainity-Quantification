@@ -7,12 +7,10 @@ import numpy as np
 import pandas as pd
 from sklearn.model_selection import StratifiedKFold, StratifiedShuffleSplit
 
-from ..features import MODEL_META, all_features, covered
+from ..features import all_features, covered
 from ..io import write_csv, write_excel
 from ..modeling import compute_metrics, fit_clg, predict_proba, preprocess, select_lam
 from ..paths import (
-    COMBINED_ALL_CSV,
-    COMBINED_CSV,
     CV_AUC_PNG,
     CV_REPEATS_CSV,
     CV_SUMMARY_CSV,
@@ -25,16 +23,15 @@ from ..paths import (
 NARROW_GRID = [0.125, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0]
 WIDE_GRID = [1.0, 2.0, 4.0, 8.0, 12.0, 16.0, 24.0, 32.0, 48.0]
 
+# A model is one or more modalities. Fusion feature blocks are concatenated here from the
+# per-modality conversion tables, which are row-aligned on RID and label, so no separate
+# fusion dataset stage is needed.
 MODELS = {
-    "MMSE": {"source": lambda: conversion_csv("mmse"), "modality": "mmse",
-             "grid": NARROW_GRID},
-    "MRI": {"source": lambda: conversion_csv("mri"), "modality": "mri",
-            "grid": WIDE_GRID},
-    "CSF": {"source": lambda: conversion_csv("csf"), "modality": "csf",
-            "grid": NARROW_GRID},
-    "MMSE+MRI": {"source": lambda: COMBINED_CSV, "modality": None, "grid": WIDE_GRID},
-    "MMSE+MRI+CSF": {"source": lambda: COMBINED_ALL_CSV, "modality": None,
-                     "grid": WIDE_GRID},
+    "MMSE": {"modalities": ("mmse",), "grid": NARROW_GRID},
+    "MRI": {"modalities": ("mri",), "grid": WIDE_GRID},
+    "CSF": {"modalities": ("csf",), "grid": NARROW_GRID},
+    "MMSE+MRI": {"modalities": ("mmse", "mri"), "grid": WIDE_GRID},
+    "MMSE+MRI+CSF": {"modalities": ("mmse", "mri", "csf"), "grid": WIDE_GRID},
 }
 
 REPORTED = [
@@ -45,18 +42,35 @@ REPORTED = [
 
 
 def load_model_data(name: str, min_coverage: float):
-    spec = MODELS[name]
-    path = spec["source"]()
-    require(path)
-    df = pd.read_csv(path, low_memory=False)
+    """Feature block for one model, concatenated across its modalities.
 
-    columns = (
-        all_features(spec["modality"], df) if spec["modality"]
-        else [c for c in df.columns if c not in MODEL_META]
-    )
-    feats, _, _ = covered(df, columns, min_coverage)
-    X = df[feats].to_numpy(dtype=float)
-    y = np.where(df["y"].to_numpy() == 1, 1.0, -1.0)
+    The per-modality conversion tables share a row order (same RIDs, same labels, same
+    canonical split), so the blocks can be stacked horizontally without a join.
+    """
+    modalities = MODELS[name]["modalities"]
+    require(*[conversion_csv(m) for m in modalities])
+
+    frames = {m: pd.read_csv(conversion_csv(m), low_memory=False) for m in modalities}
+    first = frames[modalities[0]]
+    for m in modalities[1:]:
+        assert frames[m]["RID"].tolist() == first["RID"].tolist(), (
+            f"conversion tables are not aligned on RID: {modalities[0]} vs {m}"
+        )
+        assert frames[m]["y"].tolist() == first["y"].tolist(), (
+            f"labels disagree between conversion tables: {modalities[0]} vs {m}"
+        )
+
+    feats, blocks = [], []
+    for m in modalities:
+        df = frames[m]
+        kept, _, _ = covered(df, all_features(m, df), min_coverage)
+        overlap = set(kept) & set(feats)
+        assert not overlap, f"feature name collision across modalities: {overlap}"
+        feats += kept
+        blocks.append(df[kept].to_numpy(dtype=float))
+
+    X = np.hstack(blocks)
+    y = np.where(first["y"].to_numpy() == 1, 1.0, -1.0)
     return X, y, feats
 
 

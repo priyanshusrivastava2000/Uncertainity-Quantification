@@ -24,14 +24,12 @@ BASELINE_DIR = OUTPUT_ROOT / "01_baseline_data"
 TRIMODAL_DIR = OUTPUT_ROOT / "02_trimodal_baseline"
 CONVERSION_DIR = OUTPUT_ROOT / "03_conversion_dataset"
 INDIVIDUAL_DIR = OUTPUT_ROOT / "04_individual_models"
-PIPELINE_DIR = OUTPUT_ROOT / "05_pipeline"
-COMBINED_DIR = OUTPUT_ROOT / "06_combined_mmse_mri"
-COMBINED_ALL_DIR = OUTPUT_ROOT / "07_combined_all"
-PIPELINE_ALL_DIR = OUTPUT_ROOT / "08_pipeline_all"
 CROSS_VALIDATION_DIR = OUTPUT_ROOT / "09_cross_validation"
-SPECIALIST_DIR = OUTPUT_ROOT / "10_ambiguous_specialist"
 BOUNDARY_DIR = OUTPUT_ROOT / "12_boundary_distance"
 HANDOFF_DIR = OUTPUT_ROOT / "13_modality_handoff"
+# the mirror of the handoff: what the target model does to the patients the source
+# model was confident about and therefore kept
+CONFIDENT_AUDIT_DIR = HANDOFF_DIR / "confident_audit"
 FUSION_HANDOFF_DIR = OUTPUT_ROOT / "14_fusion_handoff"
 
 STAGE_DIRS = (
@@ -39,14 +37,10 @@ STAGE_DIRS = (
     TRIMODAL_DIR,
     CONVERSION_DIR,
     INDIVIDUAL_DIR,
-    PIPELINE_DIR,
-    COMBINED_DIR,
-    COMBINED_ALL_DIR,
-    PIPELINE_ALL_DIR,
     CROSS_VALIDATION_DIR,
-    SPECIALIST_DIR,
     BOUNDARY_DIR,
     HANDOFF_DIR,
+    CONFIDENT_AUDIT_DIR,
     FUSION_HANDOFF_DIR,
 )
 
@@ -66,34 +60,6 @@ SPLIT_SOURCE_CSV = CONVERSION_DIR / "mmse_conversion.csv"
 
 INDIVIDUAL_RESULTS_CSV = INDIVIDUAL_DIR / "individual_results.csv"
 
-STAGE2_MMSE_MRI_CSV = PIPELINE_DIR / "stage2_mmse_mri.csv"
-STAGE2_BASELINE_XLSX = PIPELINE_DIR / "stage2_baseline.xlsx"
-STAGE2_FEATURE_SELECTION_XLSX = PIPELINE_DIR / "stage2_feature_selection.xlsx"
-STAGE2_PIPELINE_MATRIX_PNG = PIPELINE_DIR / "confidence_matrix_pipeline.png"
-PIPELINE_RESULTS_CSV = PIPELINE_DIR / "pipeline_results.csv"
-
-COMBINED_CSV = COMBINED_DIR / "combined_mmse_mri.csv"
-COMBINED_BASELINE_XLSX = COMBINED_DIR / "combined_baseline.xlsx"
-COMBINED_FEATURE_SELECTION_XLSX = COMBINED_DIR / "combined_feature_selection.xlsx"
-COMBINED_RESULTS_CSV = COMBINED_DIR / "combined_results.csv"
-COMBINED_BANDS_XLSX = COMBINED_DIR / "combined_confidence_bands.xlsx"
-
-COMBINED_ALL_CSV = COMBINED_ALL_DIR / "combined_all_mmse_mri_csf.csv"
-COMBINED_ALL_BASELINE_XLSX = COMBINED_ALL_DIR / "combined_all_baseline.xlsx"
-COMBINED_ALL_FEATURE_SELECTION_XLSX = (
-    COMBINED_ALL_DIR / "combined_all_feature_selection.xlsx"
-)
-COMBINED_ALL_RESULTS_CSV = COMBINED_ALL_DIR / "combined_all_results.csv"
-COMBINED_ALL_BANDS_XLSX = COMBINED_ALL_DIR / "combined_all_confidence_bands.xlsx"
-
-STAGE2_ALL_CSV = PIPELINE_ALL_DIR / "stage2_all.csv"
-STAGE2_ALL_BASELINE_XLSX = PIPELINE_ALL_DIR / "stage2_all_baseline.xlsx"
-STAGE2_ALL_FEATURE_SELECTION_XLSX = (
-    PIPELINE_ALL_DIR / "stage2_all_feature_selection.xlsx"
-)
-STAGE2_ALL_PIPELINE_MATRIX_PNG = PIPELINE_ALL_DIR / "confidence_matrix_pipeline_all.png"
-PIPELINE_ALL_RESULTS_CSV = PIPELINE_ALL_DIR / "pipeline_all_results.csv"
-
 BOUNDARY_DISTANCES_CSV = BOUNDARY_DIR / "boundary_distances.csv"
 BOUNDARY_DISTANCES_XLSX = BOUNDARY_DIR / "boundary_distances.xlsx"
 BOUNDARY_COMPARISON_PNG = BOUNDARY_DIR / "boundary_distance_comparison.png"
@@ -103,6 +69,7 @@ HANDOFF_ALL_PATIENTS_CSV = HANDOFF_DIR / "handoff_all_patients.csv"
 HANDOFF_PREDICTIONS_CSV = HANDOFF_DIR / "handoff_test_predictions.csv"
 HANDOFF_XLSX = HANDOFF_DIR / "modality_handoff.xlsx"
 HANDOFF_RESULTS_CSV = HANDOFF_DIR / "handoff_model_results.csv"
+
 
 FUSION_SPLIT_CSV = FUSION_HANDOFF_DIR / "fusion_split.csv"
 FUSION_ALL_PATIENTS_CSV = FUSION_HANDOFF_DIR / "fusion_all_patients.csv"
@@ -132,16 +99,18 @@ def conversion_xlsx(modality: str) -> Path:
     return CONVERSION_DIR / f"{modality}_conversion.xlsx"
 
 
-def feature_selection_xlsx(modality: str) -> Path:
-    return INDIVIDUAL_DIR / f"{modality}_feature_selection.xlsx"
+def feature_selection_xlsx(model: str) -> Path:
+    return INDIVIDUAL_DIR / f"{model}_feature_selection.xlsx"
 
 
-def specialist_dir(cohort_tag: str) -> Path:
-    return SPECIALIST_DIR / cohort_tag
+def confidence_bands_xlsx(model: str) -> Path:
+    return INDIVIDUAL_DIR / f"{model}_confidence_bands.xlsx"
 
 
-def specialist_file(cohort_tag: str, name: str) -> Path:
-    return specialist_dir(cohort_tag) / name
+# every artefact is named for the pair it audits, so auditing a second pair adds to
+# the directory instead of overwriting the first
+def confident_audit_path(tag: str, suffix: str) -> Path:
+    return CONFIDENT_AUDIT_DIR / f"confident_{tag}_{suffix}"
 
 
 def ensure_output_dirs() -> None:

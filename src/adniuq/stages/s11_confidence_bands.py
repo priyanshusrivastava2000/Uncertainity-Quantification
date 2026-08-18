@@ -5,34 +5,20 @@ import argparse
 import numpy as np
 import pandas as pd
 
-from ..features import MODEL_META, covered, modality_of
+from ..features import modality_of
 from ..io import write_excel
 from ..modeling import compute_metrics, out_of_fold_predictions
 from ..paths import (
-    COMBINED_ALL_BANDS_XLSX,
-    COMBINED_ALL_CSV,
-    COMBINED_ALL_RESULTS_CSV,
-    COMBINED_BANDS_XLSX,
-    COMBINED_CSV,
-    COMBINED_RESULTS_CSV,
+    INDIVIDUAL_RESULTS_CSV,
+    confidence_bands_xlsx,
     ensure_output_dirs,
     require,
 )
+from .s04_individual_models import MODELS as S04_MODELS
+from .s04_individual_models import assemble
 
-MODELS = {
-    "mmse_mri": {
-        "display": "MMSE + MRI",
-        "source": COMBINED_CSV,
-        "results": COMBINED_RESULTS_CSV,
-        "output": COMBINED_BANDS_XLSX,
-    },
-    "mmse_mri_csf": {
-        "display": "MMSE + MRI + CSF",
-        "source": COMBINED_ALL_CSV,
-        "results": COMBINED_ALL_RESULTS_CSV,
-        "output": COMBINED_ALL_BANDS_XLSX,
-    },
-}
+# the two fusion models fitted by stage 04
+MODELS = {key: S04_MODELS[key] for key in ("mmse_mri", "mmse_mri_csf")}
 
 
 def band_summary(bands: pd.DataFrame) -> pd.DataFrame:
@@ -78,23 +64,25 @@ def confidence_matrix(bands: pd.DataFrame) -> pd.DataFrame:
 
 def run(key: str, args) -> pd.DataFrame:
     spec = MODELS[key]
-    require(spec["source"], spec["results"])
+    display = spec["display"]
+    require(INDIVIDUAL_RESULTS_CSV)
 
-    df = pd.read_csv(spec["source"], low_memory=False)
-    lam = float(pd.read_csv(spec["results"]).iloc[0]["lam"])
+    results = pd.read_csv(INDIVIDUAL_RESULTS_CSV).set_index("model")
+    if display not in results.index:
+        raise SystemExit(
+            f"[error] no result row for {display} - run s04_individual_models first"
+        )
+    lam = float(results.at[display, "lam"])
 
-    feats, _, _ = covered(
-        df, [c for c in df.columns if c not in MODEL_META], args.min_coverage
-    )
+    df, X, feats, _, _, _ = assemble(key, args.min_coverage)
     counts = pd.Series([modality_of(c) for c in feats]).value_counts()
-    X = df[feats].to_numpy(dtype=float)
     y = np.where(df["y"].to_numpy() == 1, 1.0, -1.0)
     gold = (y > 0).astype(int)
     train = np.flatnonzero((df["split"] == "train").to_numpy())
     test = np.flatnonzero((df["split"] == "test").to_numpy())
 
     print(f"\n{'=' * 92}")
-    print(f"CONFIDENCE BANDS  -  {spec['display']}")
+    print(f"CONFIDENCE BANDS  -  {display}")
     print("=" * 92)
     print(f"  patients   : {len(df)}  ({len(train)} train / {len(test)} test)")
     print(f"  features   : {len(feats)}  ("
@@ -134,7 +122,7 @@ def run(key: str, args) -> pd.DataFrame:
                   "band_threshold", "train_probabilities", "test_probabilities",
                   "test_auc", "test_accuracy", "note"],
         "value": [
-            spec["display"], len(df), len(train), len(test), len(feats), lam, args.hi,
+            display, len(df), len(train), len(test), len(feats), lam, args.hi,
             f"{args.folds}-fold out-of-fold (seed {args.seed})",
             "model fitted on all training rows",
             round(test_metrics["roc_auc"], 4), round(test_metrics["accuracy"], 4),
@@ -150,7 +138,7 @@ def run(key: str, args) -> pd.DataFrame:
         "band_summary": summary,
         "confidence_matrix": matrix,
         "run_config": config,
-    }, spec["output"])
+    }, confidence_bands_xlsx(key))
 
     print("\n  band composition:")
     print(summary.to_string(index=False))

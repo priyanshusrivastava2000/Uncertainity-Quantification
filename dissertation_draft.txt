@@ -1,0 +1,655 @@
+===============================================================================
+MSc DISSERTATION - SKELETON DRAFT (headings + one-line pointers)
+Uncertainty Quantification for MCI-to-AD Conversion
+Draft v0.2 - 2026-08-17
+===============================================================================
+
+NOTE ON SCOPE
+  - Pipeline stages 05-08 have been REMOVED from the project:
+      * 05 / 08 were the two cost-aware cascades (MMSE -> +MRI, MMSE+MRI -> +CSF);
+      * 06 / 07 built the fusion datasets and fitted the fusion models.
+    The two fusion models MMSE+MRI and MMSE+MRI+CSF are RETAINED and now live in
+    stage 04 alongside the three single-modality models: a model is simply one or
+    more modalities, and fusion feature blocks are concatenated in-stage from the
+    row-aligned per-modality tables. All five models therefore share one fitting
+    path, one canonical split and one results table. Verified: the moved fusion
+    models reproduce their previous numbers exactly (MMSE+MRI 0.7966, 46 non-zero,
+    lambda=12; MMSE+MRI+CSF 0.8268, 7 non-zero, lambda=48).
+  - Consequently the cascade chapter is GONE, and with it the ambiguous-patient
+    specialist (old stage 10), which was defined on the cascade's routed patients
+    and cannot exist without it.
+  - Stage 12 (boundary_distance) remains excluded from the dissertation, though
+    the code still runs against the relocated fusion models.
+  - Constraints from MScDissertationFormat.pdf:
+      * Body <= 15,000 words; whole document (front matter + refs + appendices)
+        should not normally exceed 50 pages.
+      * Front cover format is prescribed (see FRONT MATTER below).
+      * Abstract <= 600 words.
+      * Statement of Originality is mandatory, on its own page, after Abstract.
+  - Structure follows the ECS conventions and mirrors the depth of sample.pdf
+    (5 chapters + appendix). Now 8 chapters: the removal of the cascades leaves
+    two experimental arcs rather than three, and the whole thing fits the word
+    budget with room to spare.
+
+
+===============================================================================
+FRONT MATTER
+===============================================================================
+
+TITLE PAGE (exact layout prescribed by the format document)
+  - University of Southampton / Faculty of Engineering and Physical Sciences /
+    Electronics and Computer Science
+  - Working title: "Sparse, Confidence-Aware Prediction of MCI-to-Alzheimer's
+    Conversion from Baseline Multimodal ADNI Data"
+  - Alternative title: "How Much Does Each Modality Buy? Confidence-Aware
+    Sparse Logistic Models for MCI-to-AD Conversion"
+  - by <name>; <date of completion>; Supervisor: <>; Second Examiner: <>
+  - "A dissertation submitted in partial fulfilment of the degree of MSc <...>"
+
+ABSTRACT (<= 600 words; structured as Background / Objectives / Methods / Results
+/ Conclusions, following the sample)
+  - Background: MCI is a decision point, not a diagnosis - some patients convert
+    to AD, most do not, and the tests that separate them differ wildly in cost.
+  - Objectives: quantify what each additional modality buys, in accuracy AND in
+    confidence, using models that are sparse and interpretable by construction.
+  - Methods: CLG-Lasso (Laplace-prior logistic regression, cyclic coordinate
+    descent) implemented from scratch; 776-patient tri-modal ADNI cohort at t=0;
+    five models from three modalities; every model reports a confidence x
+    correctness breakdown; results resampled over 20 stratified splits.
+  - Results: tri-modal fusion reaches ROC-AUC 0.808 +/- 0.020 resampled
+    (0.827 [0.766, 0.881] on the canonical split) on just 7 of 369 features;
+    accumulating modalities strictly beats swapping them; 36-40 % of patients
+    cannot be confidently called by any model.
+  - Conclusions: the headline number is not the finding - the finding is that a
+    new modality buys confidence on a small minority and a net accuracy gain far
+    smaller than the churn it causes.
+
+ACKNOWLEDGEMENTS
+  - Supervisor, ADNI data access, ADNI standard acknowledgement text (mandatory
+    wording - copy from the ADNI Data Use Agreement).
+
+STATEMENT OF ORIGINALITY
+  - ECS template, verbatim, with the boxes edited to reflect reality: declare the
+    from-scratch CLG-Lasso implementation vs. libraries used (numpy/pandas/
+    matplotlib/openpyxl/scikit-learn for splitting only); declare ADNI as
+    third-party data; declare no human participants recruited by me (secondary
+    data analysis).
+
+TABLE OF CONTENTS
+LIST OF FIGURES  (optional per format doc - include, ~11-13 figures)
+LIST OF TABLES   (optional - include, ~9-10 tables)
+LIST OF ABBREVIATIONS
+  - AD, MCI, ADNI, MMSE, MRI, CSF, LP, CLG, ROC-AUC, PR-AUC, CV, OOF, RID,
+    DK atlas, FreeSurfer, Elecsys.
+
+
+===============================================================================
+CHAPTER 1 - INTRODUCTION                                    (~1,100 words)
+===============================================================================
+
+1.1 Background and Motivation
+  - Alzheimer's disease and the MCI prodrome: why the conversion question is the
+    clinically actionable one.
+  - The three modalities and their real-world cost gradient: MMSE (bedside,
+    minutes, free) -> MRI (scan, expensive, scheduled) -> CSF (lumbar puncture,
+    invasive, refused by some patients).
+  - Why point accuracy is the wrong single number in a clinical setting: a model
+    that is confidently wrong is worse than one that abstains.
+
+1.2 Problem Statement
+  - Given only baseline (t=0) measurements, predict conversion - and say how
+    sure the model is.
+  - Two questions the project actually asks: (i) what does each modality add,
+    in accuracy and in confidence? (ii) when a cheap model is unsure, does a
+    more expensive one actually resolve those specific patients?
+
+1.3 Aims and Objectives
+  - Implement a sparse Bayesian logistic classifier (CLG-Lasso) from first
+    principles rather than calling a library.
+  - Build one leak-free tri-modal cohort and one canonical split so every model
+    is comparable on identical held-out patients.
+  - Report confidence x correctness for every model, not just AUC.
+  - Compare two ways of adding a modality: swapping it in, or accumulating it.
+
+1.4 Contributions
+  - A from-scratch CLG-Lasso solver with per-model feature-selection exports.
+  - A reproducible, leakage-audited ADNI baseline pipeline: one fitting path for
+    all five models, absolute paths, one canonical split read by RID.
+  - Empirical answer to "swap vs. accumulate": accumulation is strictly better,
+    and the reason is visible in the fitted weights.
+  - A quantified confidence ceiling: 36-40 % of MCI patients cannot be called
+    confidently by any combination of these three baseline modalities, and on
+    that group single-modality models score below the majority baseline.
+
+1.5 Dissertation Overview
+  - One paragraph per chapter.
+
+
+===============================================================================
+CHAPTER 2 - BACKGROUND AND RELATED WORK                     (~2,000 words)
+===============================================================================
+
+2.1 Introduction
+
+2.2 Alzheimer's Disease and Mild Cognitive Impairment
+  - Diagnostic criteria, conversion rates in the literature, why baseline-only
+    prediction is harder than longitudinal.
+
+2.3 Biomarker Modalities
+  2.3.1 Cognitive testing (MMSE) - item structure, ceiling effects, why the 30
+        items are exactly nested inside MMSCORE.
+  2.3.2 Structural MRI - FreeSurfer 7, Desikan-Killiany parcellation, what the
+        323 columns actually measure (volumes, thicknesses, surface areas).
+  2.3.3 CSF biomarkers - Roche Elecsys, Abeta42 / tau / p-tau, and the four
+        assay censoring flags that describe the assay rather than the patient.
+
+2.4 Machine Learning for MCI-to-AD Conversion: A Review
+  - Survey of prior work by model family (SVM, random forest, deep learning on
+    raw MRI, multimodal fusion), and their reported AUCs.
+  - The recurring methodological weaknesses this project avoids: preprocessing
+    fitted on all data, hyperparameters tuned on test, cohorts defined by row
+    presence rather than value presence, single-split headline numbers.
+
+2.5 Sparse Logistic Regression and the Laplace Prior
+  - L1/lasso as MAP estimation under a Laplace prior; why exact zeros arise.
+  - Genkin, Lewis & Madigan (2007) CLG algorithm: cyclic coordinate descent with
+    a trust region, and why it suits p >> n.
+  - Why sparsity is not just regularisation here - it is the interpretability
+    mechanism the clinical reader needs.
+
+2.6 Uncertainty Quantification in Clinical ML
+  - Calibration vs. confidence vs. epistemic uncertainty - and precisely which
+    of these this project measures (predicted-probability confidence, not a
+    posterior).
+  - Selective prediction / reject option / abstention literature.
+  - Confidently-wrong as the cost-bearing quadrant.
+
+2.7 Staged and Cost-Sensitive Diagnostic Testing
+  - Triage and staged-testing literature in medical decision-making: the
+    framing that motivates asking what a second test does for the patients the
+    first one could not call.
+  - Note explicitly that this dissertation evaluates the *information* question
+    (does the next modality resolve these patients?) rather than implementing a
+    deployed triage policy.
+
+2.8 Research Gap
+  - Most multimodal AD papers report a fused AUC; few report what the fusion
+    costs, who it changes its mind about, or how many patients it is
+    confidently wrong about.
+
+2.9 Chapter Summary
+
+
+===============================================================================
+CHAPTER 3 - DATA AND COHORT CONSTRUCTION                    (~1,700 words)
+===============================================================================
+
+3.1 Introduction
+
+3.2 The ADNI Database
+  - Access, licence restriction, why raw tables are not distributed with the
+    code; which source tables are used (DXSUM, MMSE, UCSFFSX7, UPENNBIOMK).
+
+3.3 Defining Baseline (t = 0)
+  - How the baseline visit is anchored per patient, and the --max-gap-months
+    control for records drifting away from t=0.
+
+3.4 Constructing the Conversion Label
+  - DXSUM diagnostic trajectory -> converter / stable.
+  - Follow-up asymmetry: a "stable" patient seen once is not a confirmed
+    non-converter; the follow-up distribution is reported, not hidden.
+
+3.5 Per-Modality Baseline Tables (stage 01)
+  - MMSE 37 features, MRI 323, CSF 9; audit report contents.
+
+3.6 The Tri-Modal Intersection (stage 02)
+  - Intersection on VALUES not rows - a patient counts only when the
+    measurement actually exists; final cohort n = 776, 281 converters (36.2 %).
+
+3.7 The Canonical Split (stage 03)
+  - Stratified 70/30, seed 42, fixed when the MMSE dataset is built and read by
+    RID downstream - never recomputed. 543 train / 233 test.
+  - Why this matters: it is what makes the five models in Chapter 5 comparable.
+
+3.8 Assembling Fusion Feature Blocks
+  - The per-modality tables are row-aligned on RID, label and split, so a
+    fusion model is a horizontal concatenation of covered feature blocks -
+    37 + 323 = 360 for MMSE+MRI, + 9 = 369 for MMSE+MRI+CSF.
+  - Alignment on RID and label is asserted at load time, and feature-name
+    collisions across modalities are asserted absent. State that this is why a
+    separate fusion dataset stage is unnecessary.
+
+3.9 Coverage Filtering and Missingness
+  - 50 % coverage floor; "a column that is 98 % imputed is a constant wearing a
+    feature's name"; what was dropped is written to the workbooks.
+
+3.10 Data Quality Caveats Carried Deliberately
+  - MMSE nesting (weights are not effect sizes).
+  - MRI field strength tracks study era and is carried as provenance, never a
+    feature.
+  - CSF censoring flags: what they are, why two survive the lasso, why they are
+    kept for consistency.
+
+3.11 Ethics and Data Governance
+  - Secondary use of de-identified data, DUA terms, no direct human involvement.
+
+3.12 Chapter Summary
+
+
+===============================================================================
+CHAPTER 4 - METHODS                                         (~2,700 words)
+===============================================================================
+
+4.1 Introduction
+
+4.2 The CLG-Lasso Classifier
+  4.2.1 Model - logistic likelihood with independent Laplace priors.
+  4.2.2 Objective and the MAP formulation.
+  4.2.3 Cyclic coordinate descent with a trust region; per-coordinate update.
+  4.2.4 Handling non-differentiability at zero, and how exact zeros are produced.
+  4.2.5 Convergence criteria and implementation notes (src/adniuq/clg_lasso.py).
+  4.2.6 Validation of the implementation - agreement against a reference
+        solver on synthetic data (sanity check to report, not a contribution).
+
+4.3 Preprocessing
+  - Median imputation and standardisation, fitted on TRAINING rows only and
+    re-fitted inside every CV fold. State the leakage guarantee explicitly.
+
+4.4 Hyperparameter Selection
+  - lambda chosen on training rows only, stratified 5-fold CV maximising
+    ROC-AUC; two grids (narrow for MMSE/CSF, wide for anything with MRI in it)
+    and why the grid must reach 48 for the tri-modal model.
+  - The test set is touched once, at the end.
+
+4.5 Evaluation Metrics
+  - ROC-AUC, PR-AUC, balanced accuracy, accuracy, sensitivity, specificity.
+  - Baselines that anchor every table: majority 0.6395, PR-AUC 0.3605.
+  - Why accuracy alone cannot carry the comparison at 36.2 % prevalence.
+
+4.6 Uncertainty and the Confidence Framework
+  4.6.1 Definition of confidence used here: max(p, 1-p), bands at 0.70 / 0.80.
+  4.6.2 The confidence x correctness 2x2 - and why "confidently wrong" is the
+        quadrant with clinical cost.
+  4.6.3 Out-of-fold vs. in-sample confidence: any patient the model was fitted
+        on gets an out-of-fold probability, because in-sample confidence is
+        optimistic; test rows carry the fitted model's probability, as in
+        deployment. The source of each number is recorded in the data.
+
+4.7 Interval Estimation
+  4.7.1 Bootstrap CIs over test patients (2000 resamples) - uncertainty from
+        WHICH patients are in the test set.
+  4.7.2 Split resampling (stage 09) - uncertainty from WHICH split was drawn,
+        with lambda re-selected and preprocessing re-fitted inside each.
+  4.7.3 These two are different quantities and must not be conflated; state
+        which question each answers.
+
+4.8 Feature Selection Reporting
+  - Non-zero vs. zeroed features per model; selection rates by modality and by
+    anatomical / cognitive group.
+  - The refit-reproduction check: the feature-selection stage refits each model
+    at its recorded lambda and asserts the non-zero count matches the results
+    table, so the exported weights provably belong to the reported model.
+
+4.9 Experimental Design Overview
+  - Table mapping research question -> pipeline stage -> chapter:
+      * what does each modality buy?          -> stage 04 + 09 -> Chapter 5
+      * who is each model confident about?    -> stage 04 + 11 -> Chapter 5
+      * does the next modality resolve them?  -> stages 13, 14 -> Chapter 6
+  - Two independent splits are used: the canonical 70/30 for Chapter 5 and a
+    separate 50/50 for Chapter 6; state that numbers across the two are NOT
+    comparable, and why.
+
+4.10 Reproducibility and Software Engineering
+  - Stage-based CLI pipeline, absolute paths resolved from package location,
+    environment-variable overrides, deterministic seeds, results upserted so
+    re-runs replace rather than duplicate.
+  - One fitting path for all five models: worth a sentence, because it is what
+    guarantees the fusion and single-modality numbers are produced identically
+    rather than by parallel code.
+
+4.11 Chapter Summary
+
+
+===============================================================================
+CHAPTER 5 - SINGLE-MODALITY AND FUSION MODELS               (~2,600 words)
+===============================================================================
+
+5.1 Introduction
+  - The question: what does each modality buy?
+  - How results are reported in this chapter, stated once and applied
+    throughout: every headline AUC is the mean +/- sd over the 20 resampled
+    stratified 70/30 splits of stage 09, with lambda re-selected inside every
+    training set and preprocessing re-fitted per split. The single canonical
+    split is reported alongside, with its bootstrap CI, as the fit whose
+    weights and feature lists are inspected later in the chapter.
+  - Why this way round: a single 70/30 split is itself a draw, and on 233 test
+    patients the difference between draws is not small. Leading with the
+    resampled number and treating the single split as one observation of it
+    avoids quoting a figure the data does not support.
+  - The two intervals answer different questions and are never combined: sd is
+    the spread across splits (which patients land in test), the bootstrap CI is
+    sampling of test patients within one split. Cross-reference 4.7.
+  - All five models are fitted by one stage on one split, so the comparison is
+    like-for-like by construction, not by convention.
+
+5.2 Single-Modality Models
+  - MMSE: 0.664 +/- 0.031 (single split 0.682 [0.606, 0.753]), 9 of 37 features
+    kept, lambda=16 - the bedside floor, and the only model that never leaves it.
+  - MRI: 0.747 +/- 0.029 (single split 0.784 [0.720, 0.850]), 36 of 323 kept,
+    lambda=12 - the largest feature space and the heaviest cost, at scan price.
+  - CSF: 0.783 +/- 0.028 (single split 0.772 [0.705, 0.836]), 5 of 9 kept,
+    lambda=2 - the best single modality under resampling, and the most
+    information per feature measured, at lumbar-puncture price.
+  - The sensitivity/specificity asymmetry common to all three: sensitivity
+    0.24-0.52, specificity 0.84-0.91. Every model is far better at ruling out
+    conversion than ruling it in. Say this here, it recurs in every later table.
+    MMSE is the extreme case - sensitivity 0.202 against specificity 0.966 on
+    the canonical split, i.e. it barely identifies converters at all.
+
+5.3 Fusion Models
+  - MMSE+MRI: 0.758 +/- 0.027 (single split 0.797 [0.729, 0.863]), 46 of 360
+    non-zero, lambda=12.
+  - MMSE+MRI+CSF: 0.808 +/- 0.020 (single split 0.827 [0.766, 0.881]), only
+    7 of 369 non-zero at lambda=48 - the headline model, and the sparsity is the
+    interesting part.
+  - The tri-modal model also has the SMALLEST spread across splits (sd 0.020 vs
+    0.027-0.031 for the rest): more modalities buy stability, not just level.
+  - The tension on the single split: highest AUC but lower balanced accuracy
+    (0.628) and sensitivity (0.309) - discuss threshold effects rather than
+    pretending it is a clean win. Under resampling the tension mostly
+    disappears (bal. acc 0.678, the best of the five), which is itself evidence
+    that the 0.628 was a property of that one split.
+  - Adding MRI to MMSE does NOT reach CSF alone (0.758 vs 0.783). The gain in
+    the tri-modal model is carried by CSF, not by fusion as such.
+
+5.4 The Hierarchy
+  - Resampled ordering: MMSE+MRI+CSF 0.808 > CSF 0.783 > MMSE+MRI 0.758 >
+    MRI 0.747 > MMSE 0.664.
+  - This is NOT the single-split ordering, which put MRI (0.784) above CSF
+    (0.772) and MMSE+MRI (0.797) above both. CSF moves from fourth to second.
+    The reordering is the chapter's argument for reporting resampled numbers,
+    and should be shown as a paired figure rather than asserted.
+  - What the data separates and what it does not: single-split CIs are ~0.13
+    wide on 233 patients, and only the tri-modal interval clears the MMSE
+    model's. Adjacent models in the ranking above are not distinguished.
+  - What survives both views: MMSE is the floor, the tri-modal model is the
+    ceiling, and everything between them is one undifferentiated band.
+  - lambda stability as a diagnostic: a lambda that jumps between resamples
+    means the regularisation strength is weakly identified by this much data;
+    report the per-split lambda alongside the per-split AUC.
+  - Figures: cv_auc_distribution.png; paired single-split vs. resampled ranking.
+  - Cost overlay: the ranking is not a recommendation until price is attached -
+    CSF buys second place at LP cost, MMSE holds last place for free. This sets
+    up Chapter 6.
+
+5.5 Which Features Survive
+  - Retention RATE tracks how informative a modality is, per feature: CSF keeps
+    5 of 9 (55.6 %) and ranks second; MRI keeps 36 of 323 (11.1 %) and ranks
+    fourth. A CSF analyte carries far more of the signal than a DK region does.
+  - Absolute COUNT does not: the tri-modal model is the strongest and keeps the
+    fewest, 7 of 369 (98.1 % sparse). Do not overstate this into "informative
+    models keep more features" - the data contradicts it, and the honest version
+    is the more interesting claim.
+  - The strongest single observation in the chapter: the tri-modal model keeps
+    ZERO of the 37 MMSE features - its 7 survivors are 2 CSF (TAU/ABETA42 ratio,
+    ABETA42) and 5 MRI (ST29SV, ST12SV, ST83TA, ST111TA, ST99TA). Given CSF and
+    MRI, the cognitive score adds nothing the lasso will pay for. Compare with
+    MMSE+MRI, which keeps 8 MMSE features when CSF is absent - MMSE is carrying
+    a signal that CSF carries better.
+  - The explanation to argue: with all three modalities available the lambda
+    search can run to 48 because a handful of cross-modal features reproduce
+    what dozens of within-modality features were each partly carrying. Fusion
+    buys sparsity as well as accuracy.
+  - Which specific features recur: the DK regions and MMSE items that survive
+    across resamples, and how often each is selected (selection-rate table).
+  - Stability caveat: feature counts and weights quoted here are from the
+    canonical single-split fit; which features survive varies across resamples,
+    so report selection frequency, not a single kept-set.
+  - The nesting caveat restated: MMSE items are exactly nested inside MMSCORE,
+    so the lasso keeps whichever collinear copy it reaches first - weights rank
+    features, they do not size effects.
+
+5.6 Confidence x Correctness Across Models
+  - Confidence matrices side by side; confidently-wrong counts as the
+    comparison that matters clinically.
+  - The tri-modal model is confident (>= 0.80) about only 21 of 233 held-out
+    patients - 9 % - but is right on 19 of those 21. High precision, tiny
+    coverage: the model that scores best is also the one that answers least.
+  - Tie back to 5.2: high specificity with low sensitivity means the confident
+    quadrant is dominated by non-converters (only 1 of the 21 is a converter).
+    State who the confidently-wrong patients are, not just how many.
+  - Whether the AUC hierarchy of 5.4 is the same hierarchy under
+    confidently-wrong count - if it is not, that is a finding.
+  - Source: stage 11 confidence-band workbooks, which carry every patient's
+    band for both fusion models with train rows scored out-of-fold.
+
+5.7 Discussion
+
+
+===============================================================================
+CHAPTER 6 - THE MODALITY HANDOFF: SWAPPING VS. ACCUMULATING (~2,400 words)
+===============================================================================
+
+6.1 Introduction
+  - A narrower question on its own footing: take the patients the cheap model
+    was NOT confident about, and ask what the next model does with those exact
+    patients - does it become confident, and does the answer change?
+  - This is where the cost argument of the dissertation now lives: not as a
+    deployed triage policy, but as a direct measurement of what the expensive
+    test resolves.
+
+6.2 Experimental Setup
+  - Fresh stratified 50/50 split (388 train / 388 test, seed 42), independent of
+    the canonical split; numbers here are lower by construction and are NOT
+    comparable to Chapter 5. State this before any table.
+  - Every one of the 776 gets a probability from every model (test rows from the
+    fitted model, train rows out-of-fold) so confident populations can be
+    counted directly.
+
+6.3 Who Is Each Classifier Confident About?
+  - Confidence counts at 0.70 and 0.80 with accuracy and confidently-wrong
+    inside each band.
+  - MMSE is the outlier: max confidence 0.741, essentially never clears 0.80,
+    and is right only 74 % of the time where it is confident at 0.70 (vs. MRI
+    83 %, CSF 87 %). This is why the source gate is 0.70.
+
+6.4 Chain A - Swapping Modalities (stage 13): MMSE -> MRI -> CSF
+  6.4.1 Hop 1, MMSE -> MRI: 224 handed off (the harder half, 43.8 % converters);
+        46 become confident (34 right / 12 confidently wrong); 37 fixed, 30
+        broken, net +7.
+  6.4.2 Hop 2, MRI -> CSF: 178 handed off; 24 become confident (21/3); 32 fixed,
+        26 broken, net +6. Mean confidence actually FALLS by 0.008.
+  6.4.3 The churn is the point - a 3-point accuracy gain is 67 patients changing
+        sides, not 7 patients improving.
+  6.4.4 End to end: 154 of 388 (40 %) that no single modality can call, and on
+        those every model scores BELOW the majority baseline - the gate is
+        correctly identifying patients on whom all three are worse than guessing.
+
+6.5 Chain B - Accumulating Modalities (stage 14): MMSE -> MMSE+MRI -> +CSF
+  6.5.1 Identical machinery, identical split, each step ADDS a modality.
+  6.5.2 Hop 1: 51 become confident (37/14); 34 fixed, 22 broken, net +12.
+  6.5.3 Hop 2: 31 become confident (29/2 - only 2 confidently wrong); 21 fixed,
+        5 broken, net +16; accuracy 0.647 -> 0.740 on those 173.
+  6.5.4 End to end: 142 of 388 (36.6 %) unclaimed vs. 154 for swapping, and the
+        tri-modal model reaches 0.697 on those 142 - above the majority baseline,
+        where every swapping model fell below it.
+
+6.6 Why Accumulating Wins
+  - The fusion model cannot lose what MMSE and MRI already knew.
+  - Its lambda search runs over 369 features rather than 9, so it can keep a CSF
+    signal AND the imaging evidence that contradicts it.
+  - Evidence from the fitted weights, not assertion - and note the connection to
+    5.5, where the tri-modal model's 7 survivors are exactly a CSF core plus MRI
+    corroboration.
+
+6.7 Gate Sensitivity
+  - The sweep sheets (gates 0.55 -> 0.90) make the gate choice visible rather
+    than assumed; show that the conclusion is not an artefact of 0.70/0.80.
+
+6.8 Discussion
+  - The consistent finding across both chains: a new modality buys confidence on
+    a small minority and a net accuracy gain far smaller than the churn it
+    causes - roughly one patient broken for every 1.2 fixed when swapping.
+
+
+===============================================================================
+CHAPTER 7 - DISCUSSION                                      (~1,500 words)
+===============================================================================
+
+7.1 Synthesis - answering the two research questions directly.
+
+7.2 What Each Modality Actually Buys
+  - Cost-per-AUC-point framing across MMSE / MRI / CSF.
+  - The 36-40 % of patients nobody can call, and what that implies about a
+    baseline-only prediction ceiling.
+  - The MMSE result stated plainly: given CSF and MRI, the tri-modal lasso keeps
+    none of it. Cheap does not mean complementary.
+
+7.3 Sparsity as a Clinical Asset
+  - A 7-feature tri-modal model is auditable; a 369-feature one is not.
+  - Caveat about instability of which features are kept across splits.
+
+7.4 Confidence as a Deployment Contract
+  - A model that abstains on 40 % and is right 90 % of the rest may be more
+    useful than one that answers everything at 76 %.
+  - How a clinic would actually operate this, and the honest limit: at the 0.80
+    band the tri-modal model answers only 9 % of patients.
+
+7.5 Limitations
+  - Single cohort (ADNI), no external validation - the headline risk.
+  - Baseline-only by design; no longitudinal signal used.
+  - Conversion label depends on follow-up length; some "stable" patients are
+    under-observed.
+  - CIs ~0.13 wide - most model comparisons are not resolved by 233 patients.
+  - Confidence here is a predicted-probability band, not a calibrated posterior;
+    no calibration curve / Brier decomposition performed.
+  - Costs are argued qualitatively, not with a formal health-economic model, and
+    no deployed triage policy is evaluated - Chapter 6 measures the information
+    a second test adds, not the policy that would act on it.
+  - Chapter 5 and Chapter 6 use different splits and are not comparable.
+  - Boundary-distance analysis (stage 12) excluded from this dissertation.
+
+7.6 Threats to Validity and How They Were Mitigated
+  - Table: threat -> mitigation -> residual risk.
+
+
+===============================================================================
+CHAPTER 8 - CONCLUSIONS AND FUTURE WORK                     (~800 words)
+===============================================================================
+
+8.1 Conclusions
+  - Restate the four contributions with the evidence attached to each.
+  - The single sentence the reader should leave with: accumulating modalities
+    beats swapping them, and both buy far less than their headline AUC suggests.
+
+8.2 Future Work
+  - External validation on a second cohort (AIBL / OASIS).
+  - Proper calibration (Platt / isotonic) and calibrated abstention thresholds.
+  - A formal cost model, and an actual staged-testing policy evaluated against
+    it - the natural successor to the cascades removed from this project.
+  - Boundary-distance analysis (stage 12) as a continuation.
+  - Longitudinal extension: how early can the confident subset be identified?
+  - Group-lasso or hierarchical priors to handle the MMSE nesting properly.
+
+
+===============================================================================
+REFERENCES
+===============================================================================
+  - Genkin, Lewis & Madigan (2007), Technometrics 49(3), 291-304.
+  - ADNI core references + mandatory ADNI acknowledgement.
+  - FreeSurfer / Desikan-Killiany atlas papers.
+  - Roche Elecsys CSF assay validation papers.
+  - Lasso / Bayesian logistic regression (Tibshirani; Park & Casella).
+  - Selective prediction / reject option (Chow; El-Yaniv & Wiener).
+  - Calibration (Guo et al.; Niculescu-Mizil & Caruana).
+  - MCI-to-AD prediction survey papers.
+  - Target ~40-60 references.
+
+
+===============================================================================
+APPENDICES
+===============================================================================
+
+A. CLG-Lasso Implementation
+  A.1 Core solver listing (clg_lasso.py, trimmed to the update rule).
+  A.2 Synthetic-data validation against a reference solver.
+
+B. Full Results Tables
+  B.1 Per-model metrics with bootstrap CIs (all five models, canonical split).
+  B.2 Stage 09 per-split results and lambda stability.
+  B.3 Handoff sweep tables (gates 0.55 -> 0.90), both chains.
+
+C. Feature Selection
+  C.1 Surviving features per model, ranked by weight (all five models).
+  C.2 Selection rates by modality and anatomical / cognitive group.
+
+D. Pipeline and Reproducibility
+  D.1 Stage list and dependency order.
+  D.2 CLI options and defaults.
+  D.3 Exact commands to regenerate every number in the dissertation.
+
+
+===============================================================================
+FIGURE / TABLE INVENTORY
+===============================================================================
+FIGURES
+  F1  Cohort construction flow (tri-modal intersection)          [to draw]
+  F2  CLG-Lasso coordinate-descent schematic                     [to draw]
+  F3  lambda cross-validation curve, tri-modal model             [have]
+  F4  Confidence x correctness matrices, all five models         [have]
+  F5  cv_auc_distribution.png (stage 09)                         [have]
+  F5b Paired ranking: single split vs. resampled (CSF reorder)   [to draw]
+  F6  Feature selection by modality / anatomical group           [have]
+  F7  hop1_mmse_to_mri.png (stage 13)                            [have]
+  F8  hop2_mri_to_csf.png (stage 13)                             [have]
+  F9  hop2_mmse_mri_to_mmse_mri_csf.png (stage 14)               [have]
+  F10 Swap vs. accumulate, net gain per hop                      [to draw]
+  F11 End-to-end coverage: who is claimed by which model         [to draw]
+
+TABLES
+  T1  Cohort composition and missingness
+  T2  Feature counts per model (37 / 323 / 9 / 360 / 369)
+  T3  Five-model comparison, canonical split with bootstrap CIs
+  T4  Stage 09 mean +/- sd across 20 resamples
+  T5  Feature retention per model, rate vs. count
+  T6  Confidence x correctness per model
+  T7  Stage 13 three-model summary (50/50 split)
+  T8  Confidence populations at 0.70 / 0.80
+  T9  Stage 13 hop summary
+  T10 Stage 14 model summary + hop summary
+  T11 Threats to validity
+
+
+===============================================================================
+WORD BUDGET (body only, target 15,000)
+===============================================================================
+  Ch 1  Introduction .................. 1,100
+  Ch 2  Background / Related Work ..... 2,000
+  Ch 3  Data and Cohort ............... 1,700
+  Ch 4  Methods ....................... 2,700
+  Ch 5  Single-Modality and Fusion .... 2,600
+  Ch 6  Modality Handoff .............. 2,400
+  Ch 7  Discussion .................... 1,500
+  Ch 8  Conclusions ................... 800
+  ------------------------------------------
+        TOTAL ........................ 14,800  -> UNDER by 200
+
+  Removing the cascade chapter took the plan from ~2,100 words over budget to
+  ~200 under, with no trimming needed anywhere else. The remaining headroom is
+  best spent on Chapter 5 (the results chapter now carrying the most weight) or
+  on Chapter 2 if the literature review needs more depth.
+
+
+===============================================================================
+OPEN QUESTIONS FOR THE SUPERVISOR
+===============================================================================
+  1. Eight body chapters or fewer? Merging Ch 7 into Ch 8 would give six.
+  2. Should the two independent splits (70/30 for Ch 5, 50/50 for Ch 6) be
+     reconciled by re-running Ch 6 on the canonical split, or is the "own
+     footing" framing acceptable as-is? This is now the main structural
+     inconsistency left in the plan.
+  3. With the cascades removed, is the cost/triage argument still adequately
+     carried by Chapter 6, or should the dissertation drop the cost framing and
+     present itself purely as a modality-contribution study?
+  4. Depth expected on the CLG derivation - full derivation, or cite and state?
+  5. Confirm the ADNI acknowledgement wording required by the DUA.

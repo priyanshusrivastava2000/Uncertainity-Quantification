@@ -6,40 +6,30 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from ..features import MODEL_META, covered, modality_of
+from ..features import modality_of
 from ..io import write_csv, write_excel
 from ..modeling import out_of_fold_predictions
 from ..paths import (
     BOUNDARY_COMPARISON_PNG,
+    BOUNDARY_DIR,
     BOUNDARY_DISTANCES_CSV,
     BOUNDARY_DISTANCES_XLSX,
-    COMBINED_ALL_CSV,
-    COMBINED_ALL_DIR,
-    COMBINED_ALL_RESULTS_CSV,
-    COMBINED_CSV,
-    COMBINED_DIR,
-    COMBINED_RESULTS_CSV,
+    INDIVIDUAL_RESULTS_CSV,
     ensure_output_dirs,
     require,
 )
+from .s04_individual_models import MODELS as S04_MODELS
+from .s04_individual_models import assemble
 
 INK, MUTED, SURFACE = "#1a1a1a", "#6b6b6b", "#ffffff"
 CONVERTER, STABLE = "#c0392b", "#2c6fbb"
 
-MODELS = {
-    "mmse_mri": {
-        "display": "MMSE + MRI",
-        "source": COMBINED_CSV,
-        "results": COMBINED_RESULTS_CSV,
-        "out_dir": COMBINED_DIR,
-    },
-    "mmse_mri_csf": {
-        "display": "MMSE + MRI + CSF",
-        "source": COMBINED_ALL_CSV,
-        "results": COMBINED_ALL_RESULTS_CSV,
-        "out_dir": COMBINED_ALL_DIR,
-    },
-}
+# the two fusion models fitted by stage 04
+MODELS = {key: S04_MODELS[key] for key in ("mmse_mri", "mmse_mri_csf")}
+
+
+def boundary_png(key: str) -> Path:
+    return BOUNDARY_DIR / f"{key}_boundary_distance.png"
 
 
 def logit(p: float) -> float:
@@ -48,16 +38,17 @@ def logit(p: float) -> float:
 
 def score_model(key: str, args) -> pd.DataFrame:
     spec = MODELS[key]
-    require(spec["source"], spec["results"])
+    require(INDIVIDUAL_RESULTS_CSV)
 
-    df = pd.read_csv(spec["source"], low_memory=False)
-    lam = float(pd.read_csv(spec["results"]).iloc[0]["lam"])
+    results = pd.read_csv(INDIVIDUAL_RESULTS_CSV).set_index("model")
+    if spec["display"] not in results.index:
+        raise SystemExit(
+            f"[error] no result row for {spec['display']} - run s04_individual_models first"
+        )
+    lam = float(results.at[spec["display"], "lam"])
 
-    feats, _, _ = covered(
-        df, [c for c in df.columns if c not in MODEL_META], args.min_coverage
-    )
+    df, X, feats, _, _, _ = assemble(key, args.min_coverage)
     counts = pd.Series([modality_of(c) for c in feats]).value_counts()
-    X = df[feats].to_numpy(dtype=float)
     y = np.where(df["y"].to_numpy() == 1, 1.0, -1.0)
     gold = (y > 0).astype(int)
     train = np.flatnonzero((df["split"] == "train").to_numpy())
@@ -292,7 +283,7 @@ def main(argv: list | None = None) -> None:
 
     for key, spec in MODELS.items():
         block = scored[scored["model_key"] == key]
-        plot_model(block, spec["display"], args, spec["out_dir"] / "boundary_distance.png")
+        plot_model(block, spec["display"], args, boundary_png(key))
     plot_comparison(paired, args, BOUNDARY_COMPARISON_PNG)
 
     crossings = paired[paired["crossed_boundary"] == 1][[
@@ -341,8 +332,8 @@ def main(argv: list | None = None) -> None:
         print(f"    of those, CSF fixed {gained} and broke {lost}")
 
     print("\n  written:")
-    for spec in MODELS.values():
-        print(f"    {spec['out_dir'] / 'boundary_distance.png'}")
+    for key in MODELS:
+        print(f"    {boundary_png(key).name}")
     print(f"    {BOUNDARY_COMPARISON_PNG}")
     print(f"    {BOUNDARY_DISTANCES_CSV.name}\n    {xlsx.name}")
 
